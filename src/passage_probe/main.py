@@ -9,7 +9,7 @@ from sentence_transformers import SentenceTransformer  # type: ignore
 import sqlite_vec  # type: ignore
 from tqdm import tqdm # type: ignore
 
-from config import *
+from .config import *
 
 # ---------------------------------------------------------------------------
 # Utility helpers
