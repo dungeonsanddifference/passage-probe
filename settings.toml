@@ -1,0 +1,28 @@
+[paths]
+# Directory to index (relative to project root or absolute)
+root_dir = "./examples"
+# SQLite database file for passages + vectors
+db_path  = "db/index.db"
+
+[model]
+name = "all-MiniLM-L6-v2" # Hugging Face model slug loaded by SentenceTransformer
+embed_dim  = 384 # Dimension of the embedding vectors (must match the model)
+
+[index]
+chunk_len      = 1000   # Passage chunk length
+chunk_overlap  = 200    # Overlap
+top_k          = 5      # Top‑K search results returned to the user
+pool_size      = 50     # candidates from each list
+rrf_k          = 60     # larger K flattens the rank curve
+
+[filters]
+max_file_size_mb = 5    # Skip files larger than this many megabytes
+# Explicitly ignore these file extensions (case‑insensitive)
+blacklist_ext = [
+  ".jpg", ".jpeg", ".png", ".gif", ".bmp", ".tif", ".tiff",  # images
+  ".pdf", ".doc", ".docx", ".ppt", ".pptx", ".xls", ".xlsx", # office
+  ".zip", ".tar", ".gz", ".7z", ".rar",                      # archives
+  ".exe", ".dll", ".so", ".dylib",                           # binaries
+]
+# Also skip directories with these names (regardless of depth)
+blacklist_dirs = ["__pycache__", ".git"]
