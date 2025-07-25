@@ -17,6 +17,5 @@ build-backend = "setuptools.build_meta"
 [tool.setuptools.packages.find]    # Teach setuptools where to look
 where = ["src"]                    # auto‑discovers my_package/*
 
-
 [project.scripts]
 passage-probe = "passage_probe.main:main"

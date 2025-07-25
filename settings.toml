@@ -11,9 +11,12 @@ embed_dim  = 384 # Dimension of the embedding vectors (must match the model)
 [index]
 chunk_len      = 1000   # Passage chunk length
 chunk_overlap  = 200    # Overlap
-top_k          = 5      # Top‑K search results returned to the user
-pool_size      = 50     # candidates from each list
-rrf_k          = 60     # larger K flattens the rank curve
+top_k          = 5     # Top‑K search results returned to the user
+pool_size      = 120    # candidates from each list
+rrf_k          = 20     # larger K flattens the rank curve
+line_by_line_ext = [    # extensions to index line‑by‑line
+  ".csv", ".tsv"
+]
 
 [filters]
 max_file_size_mb = 5    # Skip files larger than this many megabytes

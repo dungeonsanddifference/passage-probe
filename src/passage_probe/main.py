@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import re
 import sys
 import sqlite3
 import struct
-from typing import List, Tuple, Sequence
+from pathlib import Path
+from typing import Dict, List, Tuple, Sequence, Iterable
 
 from sentence_transformers import SentenceTransformer  # type: ignore
 import sqlite_vec  # type: ignore
@@ -32,6 +34,15 @@ def chunk_text(text: str, max_len: int = CHUNK_LEN, overlap: int = CHUNK_OVERLAP
     step = max_len - overlap
     return [text[i : i + max_len] for i in range(0, len(text), step)]
 
+
+def passages_for_file(path_str: str, content: str) -> List[str]:
+    """Return list of passages for *path* based on extension rules."""
+    ext = Path(path_str).suffix.lower()
+    if ext in LINE_BY_LINE_EXT:
+        # One passage per non‑empty line
+        return [ln for ln in content.splitlines() if ln.strip()]
+    return chunk_text(content)
+
 # ---------------------------------------------------------------------------
 # SQLite setup
 # ---------------------------------------------------------------------------
@@ -43,7 +54,6 @@ def ensure_db() -> sqlite3.Connection:
     con.enable_load_extension(False)
     con.execute("PRAGMA journal_mode=WAL;")
 
-    # Each chunk is a separate row, keyed by (path, chunk_idx)
     con.execute(
         """
         CREATE TABLE IF NOT EXISTS passages(
@@ -62,6 +72,26 @@ def ensure_db() -> sqlite3.Connection:
         USING vec0(embedding float[{EMBED_DIM}]);
         """
     )
+
+    # Full‑text index (external content so we keep a single source of truth)
+    con.execute(
+        """
+        CREATE VIRTUAL TABLE IF NOT EXISTS fts
+        USING fts5(
+            passage,
+            content='passages',
+            content_rowid='id',
+            tokenize='porter'
+        );
+        """
+    )
+
+    # If fts is empty but passages already exists, populate in one go
+    if con.execute("SELECT count(*) FROM fts").fetchone()[0] == 0 and \
+       con.execute("SELECT count(*) FROM passages").fetchone()[0] > 0:
+        print("Building BM25 index (one‑time)…")
+        con.execute("INSERT INTO fts(fts) VALUES('rebuild');")
+        con.commit()
 
     return con
 
@@ -97,27 +127,25 @@ def load_files() -> List[Tuple[str, str]]:
 
 def index_directory(con: sqlite3.Connection) -> None:
     existing_paths = {row[0] for row in con.execute("SELECT DISTINCT path FROM passages")}
-    new_files = [(path, txt) for path, txt in load_files() if path not in existing_paths]
-    if not new_files:
+    to_index = [(p, t) for p, t in load_files() if p not in existing_paths]
+    if not to_index:
         return
 
-    print(f"Indexing {len(new_files)} files in {ROOT_DIR} …")
+    print(f"Indexing {len(to_index)} new files …")
     model = SentenceTransformer(MODEL_NAME)
 
-    for path, full_text in tqdm(new_files, unit="file"):
-        chunks = chunk_text(full_text)
-        embeddings = model.encode(chunks, batch_size=32, normalize_embeddings=True)
-        for idx, (chunk_text_str, emb_vec) in enumerate(zip(chunks, embeddings)):
+    for path, txt in tqdm(to_index, unit="file"):
+        passages = passages_for_file(path, txt)
+        embeddings = model.encode(passages, batch_size=32, normalize_embeddings=True)
+        for idx, (passage, vec) in enumerate(zip(passages, embeddings)):
             cur = con.execute(
                 "INSERT OR IGNORE INTO passages(path, chunk, passage) VALUES (?,?,?)",
-                (path, idx, chunk_text_str),
+                (path, idx, passage),
             )
             rowid = cur.lastrowid
             if rowid:
-                con.execute(
-                    "INSERT INTO vec(rowid, embedding) VALUES (?, ?)",
-                    (rowid, serialize_f32(emb_vec)),
-                )
+                con.execute("INSERT INTO vec(rowid, embedding) VALUES (?, ?)", (rowid, serialize_f32(vec)))
+                con.execute("INSERT INTO fts(rowid, passage) VALUES (?, ?)", (rowid, passage))
     con.commit()
 
 # ---------------------------------------------------------------------------
@@ -145,9 +173,76 @@ def semantic_search(con: sqlite3.Connection, query: str, k: int = TOP_K):
         preview = passage.strip().replace("\n", " ")[:300]
         yield f"{path}#chunk{chunk_idx}", preview, dist
 
+
+def _vector_candidates(con: sqlite3.Connection, q_vec: bytes, k: int):
+    rows = con.execute(
+        "SELECT rowid, distance FROM vec WHERE embedding MATCH ? ORDER BY distance LIMIT ?",
+        (q_vec, k),
+    ).fetchall()
+    return {rid: i for i, (rid, _d) in enumerate(rows, 1)}, {rid: _d for rid, _d in rows}
+
+
+def _bm25_candidates(con: sqlite3.Connection, query: str, k: int):
+    try:
+        rows = con.execute(
+            "SELECT rowid, bm25(fts) FROM fts WHERE fts MATCH ? ORDER BY bm25(fts) LIMIT ?",
+            (query, k),
+        ).fetchall()
+    except sqlite3.OperationalError:  # likely punct‑induced syntax error
+        safe_q = _sanitize_query(query)
+        rows = con.execute(
+            "SELECT rowid, bm25(fts) FROM fts WHERE fts MATCH ? ORDER BY bm25(fts) LIMIT ?",
+            (safe_q, k),
+        ).fetchall()
+    return {rid: i for i, (rid, _s) in enumerate(rows, 1)}, {rid: _s for rid, _s in rows}
+
+
+def _rrf_score(ranks: Iterable[int], k: int = RRF_K) -> float:
+    return sum(1.0 / (k + r) for r in ranks)
+
+
+def hybrid_search(con: sqlite3.Connection, query: str, top_k: int = TOP_K) -> List[Tuple[str, str, float]]:
+    model = SentenceTransformer(MODEL_NAME)
+    q_vec = serialize_f32(model.encode(query, normalize_embeddings=True))
+
+    vec_rank, _ = _vector_candidates(con, q_vec, POOL_SIZE)
+    bm_rank, _ = _bm25_candidates(con, query, POOL_SIZE)
+
+    # RRF fusion (rowid → score)
+    fused_scores = {
+        rid: _rrf_score([vec_rank.get(rid, 10**9), bm_rank.get(rid, 10**9)])
+        for rid in (set(vec_rank) | set(bm_rank))
+    }
+
+    # Pick highest‑scoring passage per document
+    best_per_doc: Dict[str, Tuple[int, float]] = {}  # path → (rowid, score)
+    for rid, score in fused_scores.items():
+        path, chunk_idx = con.execute("SELECT path, chunk FROM passages WHERE id=?", (rid,)).fetchone()
+        if (path not in best_per_doc) or (score > best_per_doc[path][1]):
+            best_per_doc[path] = (rid, score)
+
+    # Sort these winners by score
+    winners = sorted(best_per_doc.values(), key=lambda t: t[1], reverse=True)[:top_k]
+
+    results = []
+    for rid, score in winners:
+        path, idx, passage = con.execute(
+            "SELECT path, chunk, passage FROM passages WHERE id=?", (rid,)
+        ).fetchone()
+        preview = passage.strip().replace("\n", " ")[:300]
+        results.append((f"{path}#chunk{idx}", preview, score))
+    return results
+
+
 # ---------------------------------------------------------------------------
 # Main loop
 # ---------------------------------------------------------------------------
+
+
+def _sanitize_query(q: str) -> str:
+    """Replace non‑word characters with spaces & collapse multiple spaces."""
+    cleaned = re.sub(r"[^\w]+", " ", q)
+    return re.sub(r"\s+", " ", cleaned).strip()
 
 
 def main() -> None:
@@ -161,12 +256,12 @@ def main() -> None:
 
     try:
         while True:
-            query = input("\nQuery (blank to quit) > ").strip()
-            if not query:
+            q = input("\nQuery (blank to quit) > ").strip()
+            if not q:
                 break
-            print("\nTop results:\n")
-            for i, (ref, snippet, dist) in enumerate(semantic_search(con, query), 1):
-                print(f"[{i}] {ref} (dist={dist:.4f})\n    {snippet}…\n")
+            print("\nTop results (hybrid RRF):\n")
+            for i, (ref, snippet, score) in enumerate(hybrid_search(con, q), 1):
+                print(f"[{i}] {ref} (rrf={score:.4f})\n    {snippet}…\n")
     finally:
         con.close()
 
