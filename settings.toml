@@ -11,8 +11,8 @@ embed_dim  = 384 # Dimension of the embedding vectors (must match the model)
 [index]
 chunk_len      = 1000   # Passage chunk length
 chunk_overlap  = 200    # Overlap
-top_k          = 5     # Top‑K search results returned to the user
-pool_size      = 120    # candidates from each list
+top_k          = 5      # Top‑K search results returned to the user
+pool_size      = 120    # candidates from each list, set to 0 to effectively turn off BM25
 rrf_k          = 20     # larger K flattens the rank curve
 line_by_line_ext = [    # extensions to index line‑by‑line
   ".csv", ".tsv"

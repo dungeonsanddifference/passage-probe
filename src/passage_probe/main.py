@@ -18,12 +18,12 @@ from .config import *
 # ---------------------------------------------------------------------------
 
 def serialize_f32(vec: Sequence[float]) -> bytes:
-    """Pack a float list/ndarray into raw little‑endian bytes (f32)."""
+    """Pack a float list/ndarray into raw little-endian bytes (f32)."""
     return struct.pack(f"{len(vec)}f", *vec)
 
 
 def chunk_text(text: str, max_len: int = CHUNK_LEN, overlap: int = CHUNK_OVERLAP) -> List[str]:
-    """Split *text* into overlapping chunks of ≈max_len characters.
+    """Split text into overlapping chunks of ≈max_len characters.
 
     Very simple: step = max_len - overlap; slice on character boundaries.
     Guaranteed at least one chunk (even if text < max_len).
@@ -153,6 +153,9 @@ def index_directory(con: sqlite3.Connection) -> None:
 # ---------------------------------------------------------------------------
 
 def semantic_search(con: sqlite3.Connection, query: str, k: int = TOP_K):
+    """
+    Perform a semantic search for the given query against stored embeddings.
+    """
     model = SentenceTransformer(MODEL_NAME)
     q_vec = serialize_f32(model.encode(query, normalize_embeddings=True))
 
@@ -182,18 +185,19 @@ def _vector_candidates(con: sqlite3.Connection, q_vec: bytes, k: int):
     return {rid: i for i, (rid, _d) in enumerate(rows, 1)}, {rid: _d for rid, _d in rows}
 
 
+def _sanitize_query(q: str) -> str:
+    cleaned: str = re.sub(r"[^\w]+", " ", q)
+    cleaned = re.sub(r"\s+", " ", cleaned).strip()
+    words: List[str] = cleaned.split()
+    return " OR ".join(words)
+
+
 def _bm25_candidates(con: sqlite3.Connection, query: str, k: int):
-    try:
-        rows = con.execute(
-            "SELECT rowid, bm25(fts) FROM fts WHERE fts MATCH ? ORDER BY bm25(fts) LIMIT ?",
-            (query, k),
-        ).fetchall()
-    except sqlite3.OperationalError:  # likely punct‑induced syntax error
-        safe_q = _sanitize_query(query)
-        rows = con.execute(
-            "SELECT rowid, bm25(fts) FROM fts WHERE fts MATCH ? ORDER BY bm25(fts) LIMIT ?",
-            (safe_q, k),
-        ).fetchall()
+    safe_q = _sanitize_query(query)
+    rows = con.execute(
+        "SELECT rowid, bm25(fts) FROM fts WHERE fts MATCH ? ORDER BY bm25(fts) LIMIT ?",
+        (safe_q, k),
+    ).fetchall()
     return {rid: i for i, (rid, _s) in enumerate(rows, 1)}, {rid: _s for rid, _s in rows}
 
 
@@ -202,13 +206,21 @@ def _rrf_score(ranks: Iterable[int], k: int = RRF_K) -> float:
 
 
 def hybrid_search(con: sqlite3.Connection, query: str, top_k: int = TOP_K) -> List[Tuple[str, str, float]]:
+    """
+    Perform a hybrid semantic + lexical search over stored passages.
+
+    This function combines dense embedding similarity (via a SentenceTransformer)
+    with BM25 lexical matching, then fuses their rankings using Reciprocal Rank
+    Fusion (RRF). It selects the highest-scoring passage chunk per document path,
+    and returns the top_k results sorted by fused score.
+    """
     model = SentenceTransformer(MODEL_NAME)
     q_vec = serialize_f32(model.encode(query, normalize_embeddings=True))
 
     vec_rank, _ = _vector_candidates(con, q_vec, POOL_SIZE)
     bm_rank, _ = _bm25_candidates(con, query, POOL_SIZE)
 
-    # RRF fusion (rowid → score)
+    # RRF fusion
     fused_scores = {
         rid: _rrf_score([vec_rank.get(rid, 10**9), bm_rank.get(rid, 10**9)])
         for rid in (set(vec_rank) | set(bm_rank))
@@ -237,13 +249,6 @@ def hybrid_search(con: sqlite3.Connection, query: str, top_k: int = TOP_K) -> Li
 # ---------------------------------------------------------------------------
 # Main loop
 # ---------------------------------------------------------------------------
-
-
-def _sanitize_query(q: str) -> str:
-    """Replace non‑word characters with spaces & collapse multiple spaces."""
-    cleaned = re.sub(r"[^\w]+", " ", q)
-    return re.sub(r"\s+", " ", cleaned).strip()
-
 
 def main() -> None:
     if not ROOT_DIR.exists():

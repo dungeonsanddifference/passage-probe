@@ -1,21 +1,27 @@
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
 [project]
 name = "passage-probe"
 version = "0.1.0"
-description = "Add your description here"
-readme = "README.md"
-requires-python = ">=3.11"
 dependencies = [
     "sentence-transformers>=5.0.0",
     "sqlite-vec>=0.1.6",
     "textual>=5.0.0",
 ]
+requires-python = ">=3.11"
+authors = [
+  {name = "Travis DeShazo", email = "travis.deshazo@gmail.com"}
+]
+description = "A command-line tool to index and perform hybrid semantic & lexical search over text files using SQLite, SentenceTransformers, and BM25."
+readme = "README.md"
 
-[build-system]
-requires = ["setuptools>=69"]
-build-backend = "setuptools.build_meta"
-
-[tool.setuptools.packages.find]    # Teach setuptools where to look
-where = ["src"]                    # auto‑discovers my_package/*
+[project.urls]
+Repository = "https://github.com/dungeonsanddifference/passage-probe"
 
 [project.scripts]
 passage-probe = "passage_probe.main:main"
