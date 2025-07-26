@@ -1,17 +1,11 @@
 # PassageProbe
 
+*[Boot.dev](boot.dev) Hackathon 2025 submission*
+
 One frustration I've encountered frequently in large organizations is how challenging it can be to find relevant documentation using traditional keyword search. Shared vocabulary often leads to results that are related only superficially, missing the deeper context and meaning I'm actually seeking. Driven by this challenge, I've developed an interest in semantic search that prioritizes meaning over simple keyword matching.
 
-This Python script creates an efficient semantic file search by combining dense vector embedding similarity with BM25 lexical matching, then fuses their rankings using Reciprocal Rank Fusion (RRF).  It selects the highest‑scoring passage chunk per document path, and returns the top_k results sorted by fused score. 
+This Python script attempts to perform efficient semantic file search by combining dense vector embedding similarity with BM25 lexical matching by fusing their rankings using Reciprocal Rank Fusion (RRF). It selects the highest‑scoring passage chunk per document path, and returns the top_k results sorted by fused score.
 
-This is my submission for [Boot.dev](boot.dev) Hackathon 2025.
-
----
-
-## Overview
-
-- **Semantic Indexing:** Reads text files from a directory, splits them into chunks, computes embeddings with SentenceTransformers (`all-MiniLM-L6-v2` by default), and stores them in a SQLite database with the [`sqlite_vec`](https://github.com/asg017/sqlite-vec) sqlite3 extension.
-- **Semantic Search:** Retrieves the most semantically relevant text chunks and BM25‐based candidates from indexed files given a natural language query.
 ---
 
 ## Features
@@ -19,10 +13,8 @@ This is my submission for [Boot.dev](boot.dev) Hackathon 2025.
 - **Hybrid Sematic + Lexical Retrieval:** Fuses semantic and lexical results with Reciprocal Rank Fusion (RRF) for robust, relevance-balanced search results.
 - **Incremental Indexing:** Indexes only new files upon each run.
 - **Customizable Parameters:** Configure the embedding model, chunk sizes, overlap, and file filtering.
-- **Single-file DB:** Uses only index.db — easy to copy, back‑up, or inspect with the SQLite CLI.
+- **Single-file DB:** Uses sqlite; easy to copy, back‑up, or inspect with the SQLite CLI.
 - **Token‑window Chunking:** Split files by line or overlapping windows.
-
----
 
 ## Installation
 
@@ -80,12 +72,12 @@ Press `Enter` without typing anything to exit.
 
 ## Configuration
 
-Adjust indexing and search parameters in `settings.toml`
+Adjust indexing and search parameters in [`settings.toml`](./settings.toml)
 
 ### Performance Knobs
 
-* `POOL_SIZE` – bigger ⇒ better recall, slower query. Try 20‑100.
-* `RRF_K `– smaller ⇒ BM25/vec top ranks dominate; larger flattens influence.
+* `POOL_SIZE`: bigger ⇒ better recall, slower query. Try 20‑100.
+* `RRF_K`: smaller ⇒ BM25/vec top ranks dominate; larger flattens influence.
 
 ---
 
