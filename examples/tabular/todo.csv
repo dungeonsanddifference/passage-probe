@@ -1,0 +1,8 @@
+id,task,status,due_date,priority
+1,"Complete the AI indexing algorithm","In Progress","2025-07-28","High"
+2,"Review CSV file parsing logic","Pending","2025-07-29","Medium"
+3,"Update unit tests for embedding functions","Completed","2025-07-25","High"
+4,"Prepare presentation on hybrid search techniques","Pending","2025-08-01","Low"
+5,"Refactor SQLite database schema","Pending","2025-07-30","High"
+6,"Check model inference performance","In Progress","2025-07-28","Medium"
+7,"Optimize chunk overlap logic","Completed","2025-07-26","Medium"

@@ -1,0 +1,1 @@
+Overlapping chunks test. This paragraph is deliberately made lengthy enough to test the chunk overlap functionality. The indexing algorithm should generate multiple passages from this text, each with overlapping content, ensuring continuity and accuracy of indexing.

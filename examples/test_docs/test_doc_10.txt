@@ -1,0 +1,3 @@
+Data science involves the study of data to extract meaningful insights for business.
+It combines fields such as statistics, mathematics, and computer science.
+Data scientists use algorithms and models to uncover hidden patterns within large datasets.

@@ -1,0 +1,1 @@
+Here is a document that is exactly two hundred and fifty-six characters long. Its purpose is to test whether the chunking functionality correctly handles the exact boundary conditions set by the indexing algorithm to split content into separate chunks.

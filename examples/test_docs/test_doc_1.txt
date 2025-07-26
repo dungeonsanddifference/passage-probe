@@ -1,0 +1,2 @@
+The quick brown fox jumps over the lazy dog.
+This sentence is often used for typing tests because it contains all the letters of the English alphabet.

@@ -1,0 +1,4 @@
+Line 1: Apples are red.
+Line 2: Bananas are yellow.
+Line 3: Grapes can be green or purple.
+Line 4: Lemons are sour.

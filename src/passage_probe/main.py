@@ -54,44 +54,40 @@ def ensure_db() -> sqlite3.Connection:
     con.enable_load_extension(False)
     con.execute("PRAGMA journal_mode=WAL;")
 
-    con.execute(
-        """
-        CREATE TABLE IF NOT EXISTS passages(
-            id      INTEGER PRIMARY KEY,
-            path    TEXT,
-            chunk   INTEGER,
-            passage TEXT,
-            UNIQUE(path, chunk)
+    # per‑file
+    con.execute("""
+        CREATE TABLE IF NOT EXISTS docs(
+            id   INTEGER PRIMARY KEY,
+            path TEXT UNIQUE
         );
-        """
-    )
+    """)
 
-    con.execute(
-        f"""
+    con.execute("""
+        CREATE VIRTUAL TABLE IF NOT EXISTS fts_d
+        USING fts5(fulltext, content='docs', content_rowid='id', tokenize='porter');
+    """)
+
+    # per‑passage
+    con.execute("""
+        CREATE TABLE IF NOT EXISTS passages(
+            id    INTEGER PRIMARY KEY,
+            doc_id INTEGER,
+            chunk  INTEGER,
+            passage TEXT,
+            FOREIGN KEY(doc_id) REFERENCES docs(id),
+            UNIQUE(doc_id, chunk)
+        );
+    """)
+
+    con.execute(f"""
         CREATE VIRTUAL TABLE IF NOT EXISTS vec
         USING vec0(embedding float[{EMBED_DIM}]);
-        """
-    )
+    """)
 
-    # Full‑text index (external content so we keep a single source of truth)
-    con.execute(
-        """
-        CREATE VIRTUAL TABLE IF NOT EXISTS fts
-        USING fts5(
-            passage,
-            content='passages',
-            content_rowid='id',
-            tokenize='porter'
-        );
-        """
-    )
-
-    # If fts is empty but passages already exists, populate in one go
-    if con.execute("SELECT count(*) FROM fts").fetchone()[0] == 0 and \
-       con.execute("SELECT count(*) FROM passages").fetchone()[0] > 0:
-        print("Building BM25 index (one‑time)…")
-        con.execute("INSERT INTO fts(fts) VALUES('rebuild');")
-        con.commit()
+    con.execute("""
+        CREATE VIRTUAL TABLE IF NOT EXISTS fts_p
+        USING fts5(passage, content='passages', content_rowid='id', tokenize='porter');
+    """)
 
     return con
 
@@ -125,27 +121,31 @@ def load_files() -> List[Tuple[str, str]]:
     return rows
 
 
-def index_directory(con: sqlite3.Connection) -> None:
-    existing_paths = {row[0] for row in con.execute("SELECT DISTINCT path FROM passages")}
-    to_index = [(p, t) for p, t in load_files() if p not in existing_paths]
+def index_directory(con: sqlite3.Connection):
+    seen = {row[0] for row in con.execute("SELECT path FROM docs")}
+    to_index = [(p,t) for p,t in load_files() if p not in seen]
     if not to_index:
         return
 
     print(f"Indexing {len(to_index)} new files …")
     model = SentenceTransformer(MODEL_NAME)
 
-    for path, txt in tqdm(to_index, unit="file"):
-        passages = passages_for_file(path, txt)
-        embeddings = model.encode(passages, batch_size=32, normalize_embeddings=True)
-        for idx, (passage, vec) in enumerate(zip(passages, embeddings)):
-            cur = con.execute(
-                "INSERT OR IGNORE INTO passages(path, chunk, passage) VALUES (?,?,?)",
-                (path, idx, passage),
+    for path, full_text in tqdm(to_index, unit="file"):
+        # insert into docs → get doc_id
+        cur = con.execute("INSERT INTO docs(path) VALUES (?)", (path,))
+        doc_id = cur.lastrowid
+        con.execute("INSERT INTO fts_d(rowid, fulltext) VALUES (?,?)", (doc_id, full_text))
+
+        passages = passages_for_file(path, full_text)
+        embs = model.encode(passages, batch_size=32, normalize_embeddings=True)
+        for idx, (passage, vec) in enumerate(zip(passages, embs)):
+            cur2 = con.execute(
+                "INSERT INTO passages(doc_id, chunk, passage) VALUES (?,?,?)",
+                (doc_id, idx, passage),
             )
-            rowid = cur.lastrowid
-            if rowid:
-                con.execute("INSERT INTO vec(rowid, embedding) VALUES (?, ?)", (rowid, serialize_f32(vec)))
-                con.execute("INSERT INTO fts(rowid, passage) VALUES (?, ?)", (rowid, passage))
+            rid = cur2.lastrowid
+            con.execute("INSERT INTO vec(rowid, embedding) VALUES (?, ?)", (rid, serialize_f32(vec)))
+            con.execute("INSERT INTO fts_p(rowid, passage) VALUES (?, ?)", (rid, passage))
     con.commit()
 
 # ---------------------------------------------------------------------------
@@ -195,7 +195,8 @@ def _sanitize_query(q: str) -> str:
 def _bm25_candidates(con: sqlite3.Connection, query: str, k: int):
     safe_q = _sanitize_query(query)
     rows = con.execute(
-        "SELECT rowid, bm25(fts) FROM fts WHERE fts MATCH ? ORDER BY bm25(fts) LIMIT ?",
+        "SELECT docs.id, bm25(fts_d) FROM fts_d JOIN docs ON docs.id=fts_d.rowid "
+        "WHERE fts_d MATCH ? ORDER BY bm25(fts_d) LIMIT ?",
         (safe_q, k),
     ).fetchall()
     return {rid: i for i, (rid, _s) in enumerate(rows, 1)}, {rid: _s for rid, _s in rows}
@@ -218,31 +219,33 @@ def hybrid_search(con: sqlite3.Connection, query: str, top_k: int = TOP_K) -> Li
     q_vec = serialize_f32(model.encode(query, normalize_embeddings=True))
 
     vec_rank, _ = _vector_candidates(con, q_vec, POOL_SIZE)
-    bm_rank, _ = _bm25_candidates(con, query, POOL_SIZE)
+    doc_rank, _ = _bm25_candidates(con, query, POOL_SIZE)
 
-    # RRF fusion
-    fused_scores = {
-        rid: _rrf_score([vec_rank.get(rid, 10**9), bm_rank.get(rid, 10**9)])
-        for rid in (set(vec_rank) | set(bm_rank))
-    }
+    # compute fused score per passage rowid → then keep best per doc
+    fused_scores: Dict[int,float] = {}
+    for rid, v_rank in vec_rank.items():
+        doc_id = con.execute("SELECT doc_id FROM passages WHERE id=?", (rid,)).fetchone()[0]
+        fused_scores[rid] = _rrf_score([v_rank, doc_rank.get(doc_id, 10**9)])
 
-    # Pick highest‑scoring passage per document
-    best_per_doc: Dict[str, Tuple[int, float]] = {}  # path → (rowid, score)
+    # best passage per doc
+    best: Dict[int, Tuple[int,float]] = {}  # doc_id → (rid, score)
     for rid, score in fused_scores.items():
-        path, chunk_idx = con.execute("SELECT path, chunk FROM passages WHERE id=?", (rid,)).fetchone()
-        if (path not in best_per_doc) or (score > best_per_doc[path][1]):
-            best_per_doc[path] = (rid, score)
+        doc_id = con.execute("SELECT doc_id FROM passages WHERE id=?", (rid,)).fetchone()[0]
+        if (doc_id not in best) or score > best[doc_id][1]:
+            best[doc_id] = (rid, score)
 
     # Sort these winners by score
-    winners = sorted(best_per_doc.values(), key=lambda t: t[1], reverse=True)[:top_k]
+    winners = sorted(best.values(), key=lambda t: t[1], reverse=True)[:top_k]
 
     results = []
     for rid, score in winners:
-        path, idx, passage = con.execute(
-            "SELECT path, chunk, passage FROM passages WHERE id=?", (rid,)
+        path, chunk, passage = con.execute(
+            "SELECT docs.path, passages.chunk, passages.passage "
+            "FROM passages JOIN docs ON docs.id=passages.doc_id WHERE passages.id=?",
+            (rid,),
         ).fetchone()
-        preview = passage.strip().replace("\n", " ")[:300]
-        results.append((f"{path}#chunk{idx}", preview, score))
+        snippet = passage.replace("\n"," ")[:300]
+        results.append((f"{path}#chunk{chunk}", snippet, score))
     return results
 
 

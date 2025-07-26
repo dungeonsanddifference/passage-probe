@@ -1,0 +1,9 @@
+question,answer
+"What is artificial intelligence?","Artificial intelligence is the simulation of human intelligence processes by machines, especially computer systems."
+"How does machine learning differ from AI?","Machine learning is a subset of AI where machines learn from data without explicit programming."
+"What are neural networks?","Neural networks are computational models inspired by human neural connections, widely used for pattern recognition."
+"Can AI systems understand natural language?","Yes, natural language processing (NLP) enables AI to interpret, understand, and generate human languages."
+"What's the difference between supervised and unsupervised learning?","Supervised learning trains models on labeled datasets, while unsupervised learning identifies patterns from unlabeled data."
+"Why is data quality important in AI?","Good quality data ensures accurate, reliable AI outcomes. Poor data can mislead the AI model."
+"What is reinforcement learning?","Reinforcement learning involves training models to make sequences of decisions by rewarding desired outcomes."
+"How do recommendation systems work?","Recommendation systems use user data to predict preferences and suggest relevant items or content."
