@@ -29,7 +29,7 @@ def index_directory(con: sqlite3.Connection):
     print(f"Indexing {len(to_index)} new files …")
     model = SentenceTransformer(MODEL_NAME)
 
-    for path, full_text in tqdm(to_index, unit="file"):
+    for path, full_text in to_index:
         # insert into docs → get doc_id
         cur = con.execute("INSERT INTO docs(path) VALUES (?)", (path,))
         doc_id = cur.lastrowid
