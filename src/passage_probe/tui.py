@@ -1,5 +1,4 @@
-import argparse
-from typing import Iterable
+from typing import Tuple, Iterable
 
 from textual.app import App, ComposeResult
 from textual import on, work
@@ -19,16 +18,15 @@ from .utils import serialize_f32
 from .config import *
 
 
-
-def _format_hits(hits: Iterable[tuple[str, str, float]]) -> list[Collapsible]:
-    """Return Collapsible widgets (header passed via *title* kwarg)."""
+def _format_hits(hits: Iterable[Tuple[str, str, float]]) -> list[Collapsible]:
+    """Return Collapsible widgets (header passed via `title` kwarg)."""
     out: list[Collapsible] = []
     for ref, snippet, score in hits:
         title = f"{ref}   [dim](rrf {score:.3f})[/]"
         out.append(Collapsible(Static(snippet), title=title, collapsed=True))
     return out
 
-# --------------------------------------------- modal dialogs ---------------------------------------------
+# ----- modal dialogs --------------------------------------------------------
 
 class QuitScreen(ModalScreen):
     def compose(self) -> ComposeResult:
@@ -62,7 +60,7 @@ class ConfirmIndex(ModalScreen):
         else:
             self.app.pop_screen()
 
-# ----------------------------------------------- main app -----------------------------------------------
+# ----- main app -------------------------------------------------------------
 
 class PassageProbe(App):
     CSS_PATH = "modal.tcss"
@@ -79,7 +77,7 @@ class PassageProbe(App):
         self.model = SentenceTransformer(MODEL_NAME)
         self.do_index = do_index
 
-    # ---------------- compose ----------------
+    # ----- compose ----------------
     def compose(self) -> ComposeResult:
         yield Header()
         self.input = Input(placeholder="Type query and ⏎")
@@ -89,15 +87,13 @@ class PassageProbe(App):
         yield Footer()
 
     def on_mount(self):
-        # header = Header(tall=False)
-        # self.view.dock(header)
         self.theme = "dracula"
         self.set_focus(self.input)
         self.progress.display = False
         if self.do_index:
             self._index_worker()
 
-    # ---------------- indexing ---------------
+    # -------------- indexing --------------
     def _init_progress(self, total: int):
         self.progress.display = True
         self.progress.update(total=total)
@@ -105,7 +101,7 @@ class PassageProbe(App):
 
     @work(thread=True, exclusive=True)
     def _index_worker(self):
-        """Incremental index with per‑file progress updates (no extra param)."""
+        """Incremental index with per-file progress updates (no extra param)."""
         con = ensure_db()
 
         existing = {row[0] for row in con.execute("SELECT path FROM docs")}
@@ -119,10 +115,12 @@ class PassageProbe(App):
 
         model = SentenceTransformer(MODEL_NAME)
 
+        # reimplementation of `.indexer.index_directory` to show progress
         for path, full_text in files:
             cur = con.execute("INSERT INTO docs(path) VALUES (?)", (path,))
             doc_id = cur.lastrowid
-            con.execute("INSERT INTO fts_d(rowid, fulltext) VALUES (?,?)", (doc_id, full_text))
+            con.execute("INSERT INTO fts_d(rowid, fulltext) VALUES (?,?)",
+                        (doc_id, full_text))
 
             passages = passages_for_file(path, full_text)
             embs = model.encode(passages, batch_size=32, normalize_embeddings=True)
@@ -131,8 +129,10 @@ class PassageProbe(App):
                     "INSERT INTO passages(doc_id, chunk, passage) VALUES (?,?,?)",
                     (doc_id, idx, passage),
                 ).lastrowid
-                con.execute("INSERT INTO vec(rowid, embedding) VALUES (?,?)", (rid, serialize_f32(vec)))
-                con.execute("INSERT INTO fts_p(rowid, passage) VALUES (?,?)", (rid, passage))
+                con.execute("INSERT INTO vec(rowid, embedding) VALUES (?,?)",
+                            (rid, serialize_f32(vec)))
+                con.execute("INSERT INTO fts_p(rowid, passage) VALUES (?,?)",
+                            (rid, passage))
             con.commit()
             self.call_from_thread(self.progress.advance)
 

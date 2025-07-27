@@ -7,11 +7,12 @@ where = ["src"]
 
 [project]
 name = "passage-probe"
-version = "0.1.0"
+version = "0.5.0"
 dependencies = [
     "sentence-transformers>=5.0.0",
     "sqlite-vec>=0.1.6",
     "textual>=5.0.0",
+    "rich==14.1.0"
 ]
 requires-python = ">=3.11"
 authors = [

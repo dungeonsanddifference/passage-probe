@@ -498,9 +498,10 @@ wheels = [
 
 [[package]]
 name = "passage-probe"
-version = "0.1.0"
+version = "0.5.0"
 source = { editable = "." }
 dependencies = [
+    { name = "rich" },
     { name = "sentence-transformers" },
     { name = "sqlite-vec" },
     { name = "textual" },
@@ -508,6 +509,7 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [
+    { name = "rich", specifier = "==14.1.0" },
     { name = "sentence-transformers", specifier = ">=5.0.0" },
     { name = "sqlite-vec", specifier = ">=0.1.6" },
     { name = "textual", specifier = ">=5.0.0" },

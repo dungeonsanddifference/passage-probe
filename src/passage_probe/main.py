@@ -3,7 +3,7 @@ import argparse
 
 from rich.console import Console
 
-from .config import ROOT_DIR, DB_PATH
+from .config import ROOT_DIR, DB_PATH, TOP_K
 from .db.setup import ensure_db
 from .indexer import index_directory
 from .search.hybrid import hybrid_search
@@ -27,7 +27,13 @@ def _parse_cli() -> argparse.Namespace:
     p.add_argument(
         "-q", "--query",
         metavar="TEXT",
-        help="run a single query and exit",
+        help="print a single query and exit",
+    )
+    p.add_argument(
+        "-k", "--top-k",
+        type=int,
+        metavar="NUM",
+        help="the number of documents returned to the CLI with '-q'",
     )
     # p.add_argument(
     #     "--scope",
@@ -58,7 +64,6 @@ def main() -> None:
         #     if not scope_prefix.startswith(str(ROOT_DIR)):
         #         print("Scope must be inside the root directory!")
         #         sys.exit(1)
-        
 
         status.update("Connecting to db...")
         if args.reindex and DB_PATH.exists():
@@ -67,18 +72,22 @@ def main() -> None:
         DB_PATH.parent.mkdir(parents=True, exist_ok=True)
         con = ensure_db()
 
-    if args.query is not None:
-        try:
-            if not args.skip_index:
-                status.update("Indexing...")
-                index_directory(con)
-            print("\nTop results (hybrid RRF):\n")
-            for i, (ref, snippet, score) in enumerate(hybrid_search(con, args.query), 1):
-                console.print(f"[bold purple][{i}] {ref} (rrf={score:.4f})\n    [gray66]{snippet}…\n")
-        finally:
-            con.close()
-            sys.exit(0)
+        # CLI
+        if args.query is not None:
+            try:
+                if not args.skip_index:
+                    status.update("Indexing...")
+                    index_directory(con)
+                status.update("Fetching query...")
+                console.print("\nTop results (hybrid RRF):\n")
+                for i, (ref, snippet, score) in enumerate(hybrid_search(con, args.query, args.top_k or TOP_K), 1):
+                    console.print(f"[bold purple][{i}] {ref} (rrf={score:.4f})[/bold purple]\n",
+                                  f"    [gray70]{snippet}…\n")
+            finally:
+                con.close()
+                sys.exit(0)
 
+    # TUI
     app = PassageProbe(con, do_index=not args.skip_index)
     app.run()
 
