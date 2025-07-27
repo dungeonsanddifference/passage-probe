@@ -2,6 +2,8 @@
 
 *[Boot.dev](boot.dev) Hackathon 2025 submission*
 
+[Try it now!](https://textual-web.io/2s35ct1kfju1/passageprobe)
+
 One frustration I've encountered frequently in large organizations is how challenging it can be to find relevant documentation using traditional keyword search. Shared vocabulary often leads to results that are related only superficially, missing the deeper context and meaning being sought. Driven by this challenge, I've developed an interest in semantic search that prioritizes meaning over simple keyword matching.
 
 This Python application attempts to perform efficient semantic file search by combining dense vector embedding similarity with BM25 lexical matching by fusing their rankings using Reciprocal Rank Fusion (RRF). It selects the highest‑scoring passage chunk per document, and returns the top_k results sorted by fused score.
