@@ -1,6 +1,6 @@
 # PassageProbe
 
-[![Live Demo – textual‑web](https://img.shields.io/badge/Live%E2%80%AFDemo-textual%E2%80%91web-4E4EFA?style=for-the-badge&logo=fastapi&logoColor=white)]([https://your-demo-host](https://textual-web.io/2s35ct1kfju1/passageprobe))
+[![Live Demo – textual‑web](https://img.shields.io/badge/Live%E2%80%AFDemo-textual%E2%80%91web-4E4EFA?style=for-the-badge&logo=fastapi&logoColor=white)](https://textual-web.io/2s35ct1kfju1/passageprobe)
 
 *[Boot.dev](boot.dev) Hackathon 2025 submission*
 
