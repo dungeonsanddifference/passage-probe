@@ -30,7 +30,7 @@ cd passage-probe
 ### 2. Setup Environment with `uv`
 
 > [!NOTE]
-> Instrucions for `uv` are provided, as that is currently the preferred Boot.dev Python package installer as of June 2025. You should be able to achieve the results with `pip` and `venv` if that is your preferred approach.
+> Instructions for `uv` are provided, as that is currently the preferred Boot.dev Python package installer as of June 2025. You should be able to achieve the results with `pip` and `venv` if that is your preferred approach.
 
 Ensure you have `uv` installed. If not, install via your package manager of choice or:
 
