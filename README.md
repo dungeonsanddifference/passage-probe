@@ -110,3 +110,7 @@ As this was a weekend hackathon project, there's still significant room for impr
 * Query scope filtering
 
 It's worth noting that there may be some flaws in the implementation of vector embeddings and BM25. I went into this with a cursory understanding of both, and thus this warants a deeper dive.
+
+## Known Issues
+
+* Small chunks (e.g., csv headers) appear to be overrepresented

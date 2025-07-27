@@ -1,0 +1,14 @@
+About the Author:
+
+Travis DeShazo is currently a Technical Software Engineer at ExxonMobil Technology and Engineering Company.
+
+2012–2022: Travis began his career as a Research Technician after earning his BS in Chemistry from Rowan University in 2012, focusing primarily on lubricant base stocks process research.
+
+2022–2024: Travis was selected to oversee the operation of the local distillation laboratories. During this period, he developed a keen interest in laboratory automation and embedded electronics, rapidly turning his curiosity into a passion. He began creating demonstration projects and volunteered to deliver presentations on practical automation solutions to his colleagues.
+
+2024–Present: Recognized for his skills and enthusiasm in coding and electronics, Travis joined the Pilot Plant and Laboratory Engineering Data Analytics group. Initially tasked with validating API integrations for a new in-house laboratory information management system (LIMS), he quickly identified capability gaps in the new system. Travis proactively engaged with site operations management, delivering critical metrics reports to bridge these gaps. Currently, his primary responsibility involves maintaining and improving a legacy application designed to automate LIMS registration and analytical testing submissions for product samples from pilot units, as well as aggregating data essential for mass balance closure and hydroprocessing analysis. He has continued his exploration of embedded electronics and has given educational demonstrations to local students.
+
+Language Proficiencies:
+    * Advanced: Python
+    * Functional: VBA, VB.NET, C#, C++ (Arduino Framework), SQL
+    * Currently Learning: C, Go
