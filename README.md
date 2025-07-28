@@ -84,8 +84,8 @@ $ passage-probe -q "villainous monarch" -k 1
 
 Top results (hybrid RRF):
 
-[1] /path/to/docs/semantic_search.md#chunk3 (dist=0.1234)
-    Semantic indexing refers to indexing documents based on meaning rather than exact keywords. It leverages vector embeddings to represent texts semantically…
+[1] /path/to/docs/fantasy_movies.csv#chunk8 (dist=0.1234)
+    Willow,A humble farmer protects an infant destined to end an evil queen's reign.
 ```
 
 ## Configuration
